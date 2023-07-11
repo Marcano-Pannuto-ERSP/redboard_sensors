@@ -10,11 +10,9 @@
 #include <math.h>
 #include <stdio.h>
 
-#include <uart.h>
-#include <adc.h>
 #include <spi.h>
-#include <lora.h>
-#include <gpio.h>
+#include <uart.h>
+
 
 /** Structure representing the flash chip */
 struct flash
@@ -29,18 +27,48 @@ void flash_init(struct flash *flash, struct spi *spi)
 
 void flash_read_data(struct flash *flash, uint32_t addr, uint32_t *buffer, uint32_t size)
 {
-	// Write the read command
-	// uint8_t toWrite[3];
-	// toWrite[0] = addr >> 16 & 0xFF;
-	// toWrite[1] = addr >> 8 & 0xFF;
-	// toWrite[2] = addr & 0xFF;
-	// spi_write(flash->spi, 0x03, toWrite, 3);
+	// Write command as least significant bit
+	uint32_t toWrite = 0;
+	uint32_t* tmpPtr = &toWrite;
+	uint8_t* tmp = (uint8_t*) tmpPtr;
+	tmp[0] = 0x03;
+	tmp[1] = addr >> 16;
+	tmp[2] = addr >> 8;
+	tmp[3] = addr;
 
-	addr &= 0xFFFFFF;
-	uint32_t toWrite = addr;
-	toWrite += (0x03 << 24);
 	spi_write_continue(flash->spi, &toWrite, 4);
 	spi_read(flash->spi, buffer, size);
+}
+
+// Write data from buffer to flash chip
+uint8_t flash_page_program(struct flash *flash, uint32_t addr, uint32_t *buffer, uint32_t size)
+{
+	flash_write_enable(flash);
+	//todo
+}
+
+uint8_t flash_read_status_register(struct flash *flash)
+{
+	uint32_t writeBuffer = 0x05;
+	spi_write_continue(flash->spi, &writeBuffer, 1);
+	uint32_t readBuffer = 0;
+	spi_read(flash->spi, &readBuffer, 1);
+	return (uint8_t)readBuffer;
+}
+
+uint32_t flash_read_id(struct flash *flash)
+{
+	uint32_t writeBuffer = 0x9F;
+	spi_write_continue(flash->spi, &writeBuffer, 1);
+	uint32_t readBuffer = 0;
+	spi_read(flash->spi, &readBuffer, 3);
+	return readBuffer;
+}
+
+void flash_write_enable(struct flash *flash)
+{
+	uint32_t writeBuffer = 0x06;
+	spi_write(flash->spi, &writeBuffer, 1);
 }
 
 static struct uart uart;
@@ -64,12 +92,9 @@ int main(void)
 	am_util_stdio_terminal_clear();
 	am_util_stdio_printf("Hello World!\r\n\r\n");
 
-	// gpio_init(&lora_power, 10, GPIO_MODE_OUTPUT, false);
-	//lora_receive_mode(&lora);
-
 	// Initialize spi and select the CS channel
 	spi_init(&spi, 0, 2000000u);
-	spi_chip_select(&spi, SPI_CS_0);
+	// spi_chip_select(&spi, SPI_CS_0);
 	spi_enable(&spi);
 
 	// Initialize flash
@@ -96,10 +121,17 @@ int main(void)
 	{
 		// print buffer
 		for (int i = 0; i < size; i++) {
-			am_util_stdio_printf("%02X ", (int)buf[i]);
+			am_util_stdio_printf("%02X ", (int) buf[i]);
 			am_util_delay_ms(10);
 		}
 		am_util_stdio_printf("\r\n");
+
+		// // print buffer as integers
+		// for (int i = 0; i < size; i++) {
+		// 	am_util_stdio_printf("%d ", buffer[i]);
+		// 	am_util_delay_ms(10);
+		// }
+		// am_util_stdio_printf("\r\n");
 
 		am_util_delay_ms(250);
 	}
