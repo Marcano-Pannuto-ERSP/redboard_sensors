@@ -44,7 +44,27 @@ void flash_read_data(struct flash *flash, uint32_t addr, uint32_t *buffer, uint3
 uint8_t flash_page_program(struct flash *flash, uint32_t addr, uint32_t *buffer, uint32_t size)
 {
 	flash_write_enable(flash);
-	//todo
+	uint8_t read = flash_read_status_register(flash);
+	uint8_t mask = 0b00000010;
+	read = read & mask;
+	read = read >> 1;
+	if(read == 1){
+		uint32_t toWrite = 0;
+		uint32_t* tmpPtr = &toWrite;
+		uint8_t* tmp = (uint8_t*) tmpPtr;
+		tmp[0] = 0x02;
+		tmp[1] = addr >> 16;
+		tmp[2] = addr >> 8;
+		tmp[3] = addr;
+		for(int i = 4; i < (size + 4); i++){
+			tmp[i] = (uint8_t*)buffer[i-4];
+		}
+		spi_write(flash->spi, toWrite, size+4);
+		return 1;
+	}
+	else{
+		return 0;
+	}
 }
 
 uint8_t flash_read_status_register(struct flash *flash)
