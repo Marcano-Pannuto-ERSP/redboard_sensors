@@ -67,14 +67,24 @@ int main(void)
 	am_util_stdio_printf("\r\n");
 	am_util_delay_ms(250);
 	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
+	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
 
 	// write
 	spi_chip_select(&spi, SPI_CS_3);
+	spi_chip_select(&spi, SPI_CS_0);
+	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
+	spi_chip_select(&spi, SPI_CS_3);
+
+
 	am_util_delay_ms(250);
 	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
+	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
+	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
+	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
+
 	struct timeval time = am1815_read_time(&rtc);
 
-	am_util_stdio_printf("secs: %010X\r\n", time.tv_sec);
+	am_util_stdio_printf("secs: %lld\r\n", time.tv_sec);
 
 	uint64_t sec = (uint64_t)time.tv_sec;
 	uint8_t* tmp = (uint8_t*)&sec;
@@ -93,6 +103,10 @@ int main(void)
 		am_util_delay_ms(10);
 	}
 	am_util_stdio_printf("\r\n");
+
+	uint64_t writtenSecs = 0;
+	memcpy(&writtenSecs, buffer+1, 8);
+	am_util_stdio_printf("writtenSecs: %lld\r\n", writtenSecs);
 
 	// erase data
 	am_util_delay_ms(250);
