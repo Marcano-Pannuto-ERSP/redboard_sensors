@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText 2023 Kristin Ebuengan
+// SPDX-FileCopyrightText 2023 Melody Gill
+// SPDX-FileCopyrightText 2023 Gabriel Marcano
+
+/* 
+* This is an edited file of main.c from https://github.com/gemarcano/redboard_lora_example
+* which this repo was forked from
+*
+* Tests reading time from the RTC to reading/writing/erasing from the flash chip.
+*/
+
 #include "am_mcu_apollo.h"
 #include "am_bsp.h"
 #include "am_util.h"
@@ -14,6 +26,9 @@
 #include <flash.h>
 #include <am1815.h>
 
+/*
+* Inializing the MCU and UART are the only things kept from the original file
+*/
 static struct uart uart;
 static struct spi spi;
 static struct flash flash;
@@ -66,30 +81,25 @@ int main(void)
 	}
 	am_util_stdio_printf("\r\n");
 	am_util_delay_ms(250);
-	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
+
+	// print the flash ID to make sure the CS is connected correctly
 	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
 
-	// write
+	// print the RTC ID to make sure the CS is connected correctly
 	spi_chip_select(&spi, SPI_CS_3);
-	spi_chip_select(&spi, SPI_CS_0);
-	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
-	spi_chip_select(&spi, SPI_CS_3);
-
-
 	am_util_delay_ms(250);
 	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
-	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
-	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
-	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
 
+	// write the RTC time to the flash chip
 	struct timeval time = am1815_read_time(&rtc);
-
+	// print the seconds from the RTC to make sure the time is correct
 	am_util_stdio_printf("secs: %lld\r\n", time.tv_sec);
-
 	uint64_t sec = (uint64_t)time.tv_sec;
 	uint8_t* tmp = (uint8_t*)&sec;
 	spi_chip_select(&spi, SPI_CS_0);
 	am_util_delay_ms(250);
+
+	// print the flash ID to make sure the CS is connected coorrectly
 	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
 	flash_page_program(&flash, 0x05, tmp, 8);
 
@@ -104,6 +114,7 @@ int main(void)
 	}
 	am_util_stdio_printf("\r\n");
 
+	// print the seconds again to make sure we are reading correctly
 	uint64_t writtenSecs = 0;
 	memcpy(&writtenSecs, buffer+1, 8);
 	am_util_stdio_printf("writtenSecs: %lld\r\n", writtenSecs);

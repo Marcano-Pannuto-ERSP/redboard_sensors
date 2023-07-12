@@ -1,8 +1,7 @@
 # Example application using a LoRa module, using `asimple`
 
 This is an example application using the asimple and forked AmbiqSuiteSDK
-projects to sense the voltage of an attached LMT84 and send it as JSON over
-LoRa PHY.
+projects to read time from the RTC and read/write/erase from the flash chip.
 
 ## Dependencies
  - https://github.com/gemarcano/AmbiqSuiteSDK
