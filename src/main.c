@@ -25,6 +25,21 @@ void flash_init(struct flash *flash, struct spi *spi)
 	flash->spi = spi;
 }
 
+uint8_t flash_read_status_register(struct flash *flash)
+{
+	uint32_t writeBuffer = 0x05;
+	spi_write_continue(flash->spi, &writeBuffer, 1);
+	uint32_t readBuffer = 0;
+	spi_read(flash->spi, &readBuffer, 1);
+	return (uint8_t)readBuffer;
+}
+
+void flash_write_enable(struct flash *flash)
+{
+	uint32_t writeBuffer = 0x06;
+	spi_write(flash->spi, &writeBuffer, 1);
+}
+
 void flash_read_data(struct flash *flash, uint32_t addr, uint32_t *buffer, uint32_t size)
 {
 	// Write command as least significant bit
@@ -43,37 +58,46 @@ void flash_read_data(struct flash *flash, uint32_t addr, uint32_t *buffer, uint3
 // Write data from buffer to flash chip
 uint8_t flash_page_program(struct flash *flash, uint32_t addr, uint32_t *buffer, uint32_t size)
 {
+	am_util_stdio_printf("buffer[1]: %02X\r\n", *(buffer+1));
+
+	// Enable writing and check that status register updated
 	flash_write_enable(flash);
 	uint8_t read = flash_read_status_register(flash);
 	uint8_t mask = 0b00000010;
 	read = read & mask;
 	read = read >> 1;
-	if(read == 1){
-		uint32_t toWrite = 0;
-		uint32_t* tmpPtr = &toWrite;
-		uint8_t* tmp = (uint8_t*) tmpPtr;
-		tmp[0] = 0x02;
-		tmp[1] = addr >> 16;
-		tmp[2] = addr >> 8;
-		tmp[3] = addr;
-		for(int i = 4; i < (size + 4); i++){
-			tmp[i] = (uint8_t*)buffer[i-4];
-		}
-		spi_write(flash->spi, toWrite, size+4);
-		return 1;
-	}
-	else{
+
+	// Indicate failure if write enable didn't work
+	if (read == 0) {
 		return 0;
 	}
-}
 
-uint8_t flash_read_status_register(struct flash *flash)
-{
-	uint32_t writeBuffer = 0x05;
-	spi_write_continue(flash->spi, &writeBuffer, 1);
-	uint32_t readBuffer = 0;
-	spi_read(flash->spi, &readBuffer, 1);
-	return (uint8_t)readBuffer;
+	uint32_t finalArray[size/4 + 2];		// Array to be written
+	// Add command and address to array 
+	uint8_t* tmp = (uint8_t*) finalArray;
+	tmp[0] = 0x02;
+	tmp[1] = addr >> 16;
+	tmp[2] = addr >> 8;
+	tmp[3] = addr;
+
+	am_util_stdio_printf("finalArray[0]: %02X\r\n", finalArray[0]);
+
+	// Add buffer data to array
+	uint8_t* bufferTmp = (uint8_t*) buffer;
+	for (int i = 0; i < size; i++) {
+		tmp[i + 4] = bufferTmp[i];
+
+		am_util_stdio_printf("bufferTmp[%d]: %02X\r\n", i, *(bufferTmp+i));
+		am_util_delay_ms(10);
+	}
+
+	// Need to reverse order of bytes in buffer so they get written in order
+	// for(int i = 4; i < (size + 4); i++){
+	// 	tmp[i] = (uint8_t*)buffer[i-4];
+	// }
+
+	spi_write(flash->spi, finalArray, size+4);
+	return 1;
 }
 
 uint32_t flash_read_id(struct flash *flash)
@@ -83,12 +107,6 @@ uint32_t flash_read_id(struct flash *flash)
 	uint32_t readBuffer = 0;
 	spi_read(flash->spi, &readBuffer, 3);
 	return readBuffer;
-}
-
-void flash_write_enable(struct flash *flash)
-{
-	uint32_t writeBuffer = 0x06;
-	spi_write(flash->spi, &writeBuffer, 1);
 }
 
 static struct uart uart;
@@ -121,38 +139,59 @@ int main(void)
 	flash_init(&flash, &spi);
 
 	// Test flash functions
-	int size = 10;
+	int size = 15;
 	uint32_t buffer[size];		// this is 4x bigger than necessary
+	// initialize buffer to all -1 (shouldn't be necessary to do this)
 	for (int i = 0; i < size; i++) {
 		buffer[i] = -1;
 	}
-	// print buffer
+
+	// print the data before write
+	flash_read_data(&flash, 0x04, buffer, size);
+	char* buf = buffer;
+
 	for (int i = 0; i < size; i++) {
-		am_util_stdio_printf("%d ", buffer[i]);
+		am_util_stdio_printf("%02X ", (int) buf[i]);
 		am_util_delay_ms(10);
 	}
 	am_util_stdio_printf("\r\n");
 
+	am_util_delay_ms(250);
+
+	// write
+	uint32_t data[3];
+	// data[0] = 0x01020304;
+	// data[1] = 0x05060708;
+	// data[2] = 0x090a0b0c;
+	data[0] = 7;
+	data[1] = 8;
+	data[2] = 9;
+	flash_page_program(&flash, 0x05, data, 12);
+
+	// print flash data after write
 	flash_read_data(&flash, 0x04, buffer, size);
+	buf = buffer;
 
-	char* buf = buffer;
-
-	while (1)
-	{
-		// print buffer
-		for (int i = 0; i < size; i++) {
-			am_util_stdio_printf("%02X ", (int) buf[i]);
-			am_util_delay_ms(10);
-		}
-		am_util_stdio_printf("\r\n");
-
-		// // print buffer as integers
-		// for (int i = 0; i < size; i++) {
-		// 	am_util_stdio_printf("%d ", buffer[i]);
-		// 	am_util_delay_ms(10);
-		// }
-		// am_util_stdio_printf("\r\n");
-
-		am_util_delay_ms(250);
+	for (int i = 0; i < size; i++) {
+		am_util_stdio_printf("%02X ", (int) buf[i]);
+		am_util_delay_ms(10);
 	}
+	am_util_stdio_printf("\r\n");
+
+	am_util_delay_ms(250);
+
+	// while (1)
+	// {
+	// 	// print buffer
+	// 	for (int i = 0; i < size; i++) {
+	// 		am_util_stdio_printf("%02X ", (int) buf[i]);
+	// 		am_util_delay_ms(10);
+	// 	}
+	// 	am_util_stdio_printf("\r\n");
+
+	// 	am_util_delay_ms(250);
+	// }
+
+	am_util_stdio_printf("done\r\n");
+
 }
