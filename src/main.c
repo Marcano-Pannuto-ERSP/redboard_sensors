@@ -78,8 +78,6 @@ uint8_t flash_page_program(struct flash *flash, uint32_t addr, uint8_t *buffer, 
 	tmp[1] = addr >> 16;
 	tmp[2] = addr >> 8;
 	tmp[3] = addr;
-
-	am_util_stdio_printf("toWrite: %02X\r\n", toWrite);
 	spi_write_continue(flash->spi, &toWrite, 4);
 
 	// Write the data
@@ -88,6 +86,32 @@ uint8_t flash_page_program(struct flash *flash, uint32_t addr, uint8_t *buffer, 
 	spi_write(flash->spi, data, size);
 	free(data);
 	data = NULL;
+	return 1;
+}
+
+uint8_t flash_sector_erase(struct flash *flash, uint32_t addr)
+{
+	// Enable writing and check that status register updated
+	flash_write_enable(flash);
+	uint8_t read = flash_read_status_register(flash);
+	uint8_t mask = 0b00000010;
+	read = read & mask;
+	read = read >> 1;
+
+	// Indicate failure if write enable didn't work
+	if (read == 0) {
+		return 0;
+	}
+
+	// Write command as least significant bit
+	uint32_t toWrite = 0;
+	uint32_t* tmpPtr = &toWrite;
+	uint8_t* tmp = (uint8_t*) tmpPtr;
+	tmp[0] = 0x20;
+	tmp[1] = addr >> 16;
+	tmp[2] = addr >> 8;
+	tmp[3] = addr;
+	spi_write(flash->spi, &toWrite, 4);
 	return 1;
 }
 
@@ -140,55 +164,45 @@ int main(void)
 	// print the data before write
 	flash_read_data(&flash, 0x04, buffer, size);
 	char* buf = buffer;
-
+	am_util_stdio_printf("before write:\r\n");
 	for (int i = 0; i < size; i++) {
 		am_util_stdio_printf("%02X ", (int) buf[i]);
 		am_util_delay_ms(10);
 	}
 	am_util_stdio_printf("\r\n");
-
 	am_util_delay_ms(250);
 
 	// write
 	uint8_t data[3];
-	// data[0] = 0x01020304;
-	// data[1] = 0x05060708;
-	// data[2] = 0x090a0b0c;
 	data[0] = 7;
 	data[1] = 8;
 	data[2] = 9;
 	flash_page_program(&flash, 0x05, data, 3);
 
-	am_util_stdio_printf("status: %02X\r\n", flash_read_status_register(&flash));
-
-	am_util_delay_ms(1000);
-
-	am_util_stdio_printf("status: %02X\r\n", flash_read_status_register(&flash));
-
 	// print flash data after write
+	am_util_delay_ms(1000);
 	flash_read_data(&flash, 0x04, buffer, size);
 	buf = buffer;
-
+	am_util_stdio_printf("after write:\r\n");
 	for (int i = 0; i < size; i++) {
 		am_util_stdio_printf("%02X ", (int) buf[i]);
 		am_util_delay_ms(10);
 	}
 	am_util_stdio_printf("\r\n");
 
+	// erase data
 	am_util_delay_ms(250);
+	flash_sector_erase(&flash, 0x05);
 
-	// while (1)
-	// {
-	// 	// print buffer
-	// 	for (int i = 0; i < size; i++) {
-	// 		am_util_stdio_printf("%02X ", (int) buf[i]);
-	// 		am_util_delay_ms(10);
-	// 	}
-	// 	am_util_stdio_printf("\r\n");
-
-	// 	am_util_delay_ms(250);
-	// }
-
+	// print flash data after write
+	am_util_delay_ms(1000);
+	flash_read_data(&flash, 0x04, buffer, size);
+	buf = buffer;
+	am_util_stdio_printf("after erase:\r\n");
+	for (int i = 0; i < size; i++) {
+		am_util_stdio_printf("%02X ", (int) buf[i]);
+		am_util_delay_ms(10);
+	}
+	am_util_stdio_printf("\r\n");
 	am_util_stdio_printf("done\r\n");
-
 }
