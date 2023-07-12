@@ -1,6 +1,3 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright: Gabriel Marcano, 2023
-
 #include "am_mcu_apollo.h"
 #include "am_bsp.h"
 #include "am_util.h"
@@ -9,124 +6,18 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <time.h>
+#include <sys/time.h>
 
 #include <spi.h>
 #include <uart.h>
-
-
-/** Structure representing the flash chip */
-struct flash
-{
-	struct spi *spi;
-};
-
-void flash_init(struct flash *flash, struct spi *spi)
-{
-	flash->spi = spi;
-}
-
-uint8_t flash_read_status_register(struct flash *flash)
-{
-	uint32_t writeBuffer = 0x05;
-	spi_write_continue(flash->spi, &writeBuffer, 1);
-	uint32_t readBuffer = 0;
-	spi_read(flash->spi, &readBuffer, 1);
-	return (uint8_t)readBuffer;
-}
-
-void flash_write_enable(struct flash *flash)
-{
-	uint32_t writeBuffer = 0x06;
-	spi_write(flash->spi, &writeBuffer, 1);
-}
-
-void flash_read_data(struct flash *flash, uint32_t addr, uint32_t *buffer, uint32_t size)
-{
-	// Write command as least significant bit
-	uint32_t toWrite = 0;
-	uint32_t* tmpPtr = &toWrite;
-	uint8_t* tmp = (uint8_t*) tmpPtr;
-	tmp[0] = 0x03;
-	tmp[1] = addr >> 16;
-	tmp[2] = addr >> 8;
-	tmp[3] = addr;
-
-	spi_write_continue(flash->spi, &toWrite, 4);
-	spi_read(flash->spi, buffer, size);
-}
-
-// Write data from buffer to flash chip
-uint8_t flash_page_program(struct flash *flash, uint32_t addr, uint8_t *buffer, uint32_t size)
-{
-	// Enable writing and check that status register updated
-	flash_write_enable(flash);
-	uint8_t read = flash_read_status_register(flash);
-	uint8_t mask = 0b00000010;
-	read = read & mask;
-	read = read >> 1;
-
-	// Indicate failure if write enable didn't work
-	if (read == 0) {
-		return 0;
-	}
-
-	// Write command as least significant bit
-	uint32_t toWrite = 0;
-	uint32_t* tmpPtr = &toWrite;
-	uint8_t* tmp = (uint8_t*) tmpPtr;
-	tmp[0] = 0x02;
-	tmp[1] = addr >> 16;
-	tmp[2] = addr >> 8;
-	tmp[3] = addr;
-	spi_write_continue(flash->spi, &toWrite, 4);
-
-	// Write the data
-	uint32_t *data = malloc(((size+3)/4) * 4);
-	memcpy(data, buffer, size);
-	spi_write(flash->spi, data, size);
-	free(data);
-	data = NULL;
-	return 1;
-}
-
-uint8_t flash_sector_erase(struct flash *flash, uint32_t addr)
-{
-	// Enable writing and check that status register updated
-	flash_write_enable(flash);
-	uint8_t read = flash_read_status_register(flash);
-	uint8_t mask = 0b00000010;
-	read = read & mask;
-	read = read >> 1;
-
-	// Indicate failure if write enable didn't work
-	if (read == 0) {
-		return 0;
-	}
-
-	// Write command as least significant bit
-	uint32_t toWrite = 0;
-	uint32_t* tmpPtr = &toWrite;
-	uint8_t* tmp = (uint8_t*) tmpPtr;
-	tmp[0] = 0x20;
-	tmp[1] = addr >> 16;
-	tmp[2] = addr >> 8;
-	tmp[3] = addr;
-	spi_write(flash->spi, &toWrite, 4);
-	return 1;
-}
-
-uint32_t flash_read_id(struct flash *flash)
-{
-	uint32_t writeBuffer = 0x9F;
-	spi_write_continue(flash->spi, &writeBuffer, 1);
-	uint32_t readBuffer = 0;
-	spi_read(flash->spi, &readBuffer, 3);
-	return readBuffer;
-}
+#include <flash.h>
+#include <am1815.h>
 
 static struct uart uart;
 static struct spi spi;
 static struct flash flash;
+static struct am1815 rtc;
 
 int main(void)
 {
@@ -147,11 +38,15 @@ int main(void)
 
 	// Initialize spi and select the CS channel
 	spi_init(&spi, 0, 2000000u);
-	// spi_chip_select(&spi, SPI_CS_0);
 	spi_enable(&spi);
 
 	// Initialize flash
 	flash_init(&flash, &spi);
+
+	// Initalize RTC
+	am1815_init(&rtc, &spi);
+
+	spi_chip_select(&spi, SPI_CS_0);
 
 	// Test flash functions
 	int size = 15;
@@ -171,13 +66,22 @@ int main(void)
 	}
 	am_util_stdio_printf("\r\n");
 	am_util_delay_ms(250);
+	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
 
 	// write
-	uint8_t data[3];
-	data[0] = 7;
-	data[1] = 8;
-	data[2] = 9;
-	flash_page_program(&flash, 0x05, data, 3);
+	spi_chip_select(&spi, SPI_CS_3);
+	am_util_delay_ms(250);
+	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
+	struct timeval time = am1815_read_time(&rtc);
+
+	am_util_stdio_printf("secs: %010X\r\n", time.tv_sec);
+
+	uint64_t sec = (uint64_t)time.tv_sec;
+	uint8_t* tmp = (uint8_t*)&sec;
+	spi_chip_select(&spi, SPI_CS_0);
+	am_util_delay_ms(250);
+	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
+	flash_page_program(&flash, 0x05, tmp, 8);
 
 	// print flash data after write
 	am_util_delay_ms(1000);
