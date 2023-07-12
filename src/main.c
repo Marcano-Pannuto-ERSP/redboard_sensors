@@ -56,10 +56,8 @@ void flash_read_data(struct flash *flash, uint32_t addr, uint32_t *buffer, uint3
 }
 
 // Write data from buffer to flash chip
-uint8_t flash_page_program(struct flash *flash, uint32_t addr, uint32_t *buffer, uint32_t size)
+uint8_t flash_page_program(struct flash *flash, uint32_t addr, uint8_t *buffer, uint32_t size)
 {
-	am_util_stdio_printf("buffer[1]: %02X\r\n", *(buffer+1));
-
 	// Enable writing and check that status register updated
 	flash_write_enable(flash);
 	uint8_t read = flash_read_status_register(flash);
@@ -72,31 +70,24 @@ uint8_t flash_page_program(struct flash *flash, uint32_t addr, uint32_t *buffer,
 		return 0;
 	}
 
-	uint32_t finalArray[size/4 + 2];		// Array to be written
-	// Add command and address to array 
-	uint8_t* tmp = (uint8_t*) finalArray;
+	// Write command as least significant bit
+	uint32_t toWrite = 0;
+	uint32_t* tmpPtr = &toWrite;
+	uint8_t* tmp = (uint8_t*) tmpPtr;
 	tmp[0] = 0x02;
 	tmp[1] = addr >> 16;
 	tmp[2] = addr >> 8;
 	tmp[3] = addr;
 
-	am_util_stdio_printf("finalArray[0]: %02X\r\n", finalArray[0]);
+	am_util_stdio_printf("toWrite: %02X\r\n", toWrite);
+	spi_write_continue(flash->spi, &toWrite, 4);
 
-	// Add buffer data to array
-	uint8_t* bufferTmp = (uint8_t*) buffer;
-	for (int i = 0; i < size; i++) {
-		tmp[i + 4] = bufferTmp[i];
-
-		am_util_stdio_printf("bufferTmp[%d]: %02X\r\n", i, *(bufferTmp+i));
-		am_util_delay_ms(10);
-	}
-
-	// Need to reverse order of bytes in buffer so they get written in order
-	// for(int i = 4; i < (size + 4); i++){
-	// 	tmp[i] = (uint8_t*)buffer[i-4];
-	// }
-
-	spi_write(flash->spi, finalArray, size+4);
+	// Write the data
+	uint32_t *data = malloc(((size+3)/4) * 4);
+	memcpy(data, buffer, size);
+	spi_write(flash->spi, data, size);
+	free(data);
+	data = NULL;
 	return 1;
 }
 
@@ -140,7 +131,7 @@ int main(void)
 
 	// Test flash functions
 	int size = 15;
-	uint32_t buffer[size];		// this is 4x bigger than necessary
+	uint8_t buffer[size];		// this is 4x bigger than necessary
 	// initialize buffer to all -1 (shouldn't be necessary to do this)
 	for (int i = 0; i < size; i++) {
 		buffer[i] = -1;
@@ -159,14 +150,20 @@ int main(void)
 	am_util_delay_ms(250);
 
 	// write
-	uint32_t data[3];
+	uint8_t data[3];
 	// data[0] = 0x01020304;
 	// data[1] = 0x05060708;
 	// data[2] = 0x090a0b0c;
 	data[0] = 7;
 	data[1] = 8;
 	data[2] = 9;
-	flash_page_program(&flash, 0x05, data, 12);
+	flash_page_program(&flash, 0x05, data, 3);
+
+	am_util_stdio_printf("status: %02X\r\n", flash_read_status_register(&flash));
+
+	am_util_delay_ms(1000);
+
+	am_util_stdio_printf("status: %02X\r\n", flash_read_status_register(&flash));
 
 	// print flash data after write
 	flash_read_data(&flash, 0x04, buffer, size);
