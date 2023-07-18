@@ -45,6 +45,130 @@ uint8_t BMP280_read_id(struct BMP280 *BMP280)
 	return (uint8_t)readBuffer;
 }
 
+void BMP280_read_register(struct BMP280 *BMP280, uint32_t addr, uint32_t *buffer, uint32_t size)
+{
+	addr |= 0x80;
+	spi_write_continue(BMP280->spi, &addr, 1);
+	spi_read(BMP280->spi, buffer, size);
+}
+
+uint32_t BMP280_get_adc_temp(struct BMP280 *BMP280)
+{
+	// take out of sleep mode
+	// set temp oversampling
+	uint32_t activate = 0b00100001;
+
+	// write temp sampling to the register
+	uint32_t addr = 0xF4 & 0x7F;
+	uint32_t buffer = 0;
+	uint8_t* ptr = &buffer;
+	ptr[0] = addr;
+	ptr[1] = activate;
+	spi_write(BMP280->spi, &buffer, 2);
+
+	uint32_t tempRegister = 0xFA;
+	spi_write_continue(BMP280->spi, &tempRegister, 1);
+	uint32_t readBuffer = 0;
+	spi_read(BMP280->spi, &readBuffer, 3);
+	uint8_t* ptr2 = &readBuffer;
+	uint32_t temp = ptr2[2] + (ptr2[1] << 8) + (ptr2[0] << 16);
+	temp = temp >> 4;
+	return temp;
+}
+
+void BMP280_read_register(struct BMP280 *BMP280, uint32_t addr, uint32_t *buffer, uint32_t size)
+{
+	addr |= 0x80;
+	spi_write_continue(BMP280->spi, &addr, 1);
+	spi_read(BMP280->spi, buffer, size);
+}
+
+uint32_t BMP280_get_adc_temp(struct BMP280 *BMP280)
+{
+	// take out of sleep mode
+	// set temp oversampling
+	uint32_t activate = 0b00100001;
+
+	// write temp sampling to the register
+	uint32_t addr = 0xF4 & 0x7F;
+	uint32_t buffer = 0;
+	uint8_t* ptr = &buffer;
+	ptr[0] = addr;
+	ptr[1] = activate;
+	spi_write(BMP280->spi, &buffer, 2);
+
+	uint32_t tempRegister = 0xFA;
+	spi_write_continue(BMP280->spi, &tempRegister, 1);
+	uint32_t readBuffer = 0;
+	spi_read(BMP280->spi, &readBuffer, 3);
+	uint8_t* ptr2 = &readBuffer;
+	uint32_t temp = ptr2[2] + (ptr2[1] << 8) + (ptr2[0] << 16);
+	temp = temp >> 4;
+	return temp;
+}
+
+void BMP280_read_register(struct BMP280 *BMP280, uint32_t addr, uint32_t *buffer, uint32_t size)
+{
+	addr |= 0x80;
+	spi_write_continue(BMP280->spi, &addr, 1);
+	spi_read(BMP280->spi, buffer, size);
+}
+
+uint32_t BMP280_get_adc_temp(struct BMP280 *BMP280)
+{
+	// take out of sleep mode
+	// set temp oversampling
+	uint32_t activate = 0b00100001;
+
+	// write temp sampling to the register
+	uint32_t addr = 0xF4 & 0x7F;
+	uint32_t buffer = 0;
+	uint8_t* ptr = &buffer;
+	ptr[0] = addr;
+	ptr[1] = activate;
+	spi_write(BMP280->spi, &buffer, 2);
+
+	uint32_t tempRegister = 0xFA;
+	spi_write_continue(BMP280->spi, &tempRegister, 1);
+	uint32_t readBuffer = 0;
+	spi_read(BMP280->spi, &readBuffer, 3);
+	uint8_t* ptr2 = &readBuffer;
+	uint32_t temp = ptr2[2] + (ptr2[1] << 8) + (ptr2[0] << 16);
+	temp = temp >> 4;
+	return temp;
+}
+
+void BMP280_read_register(struct BMP280 *BMP280, uint32_t addr, uint32_t *buffer, uint32_t size)
+{
+	addr |= 0x80;
+	spi_write_continue(BMP280->spi, &addr, 1);
+	spi_read(BMP280->spi, buffer, size);
+}
+
+uint32_t BMP280_get_adc_temp(struct BMP280 *BMP280)
+{
+	// take out of sleep mode
+	// set temp oversampling
+	uint32_t activate = 0b00100001;
+
+	// write temp sampling to the register
+	uint32_t addr = 0xF4 & 0x7F;
+	uint32_t buffer = 0;
+	uint8_t* ptr = &buffer;
+	ptr[0] = addr;
+	ptr[1] = activate;
+	spi_write(BMP280->spi, &buffer, 2);
+
+	uint32_t tempRegister = 0xFA;
+	spi_write_continue(BMP280->spi, &tempRegister, 1);
+	uint32_t readBuffer = 0;
+	spi_read(BMP280->spi, &readBuffer, 3);
+	uint8_t* ptr2 = &readBuffer;
+	uint32_t temp = ptr2[2] + (ptr2[1] << 8) + (ptr2[0] << 16);
+	temp = temp >> 4;
+	return temp;
+}
+
 // These functions are from the BMP280 datasheet section 8.1
 // They are edited a little bit but the math is the same
 
@@ -148,9 +272,12 @@ int main(void)
 
 	// Get ID of sensor
 	am_util_stdio_printf("ID: %02X\r\n", BMP280_read_id(&sensor));
-	am_util_stdio_printf("test\r\n");
+	uint32_t buffer = 0;
+	BMP280_read_register(&sensor, 0xD0, &buffer, 1);
+	am_util_stdio_printf("Read Register ID: %02X\r\n", buffer);
+	am_util_stdio_printf("Raw Temp: %u\r\n", BMP280_get_adc_temp(&sensor));
 
-	while (1)
-	{
+	while(1){
+
 	};
 }
