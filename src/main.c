@@ -45,8 +45,33 @@ uint8_t BMP280_read_id(struct BMP280 *BMP280)
 	return (uint8_t)readBuffer;
 }
 
-// Returns temperature in DegC, double precision. Output value of “51.23” equals 51.23 DegC.
-// t_fine carries fine temperature as global value
+// These functions are from the BMP280 datasheet section 8.1
+// They are edited a little bit but the math is the same
+
+// Returns a signed short from the two parameter bytes
+// Assuming little endian (although I don't think that matters here)
+int16_t bmp280_make_signed_short(uint8_t msb, uint8_t lsb)
+{
+	int16_t toReturn = (msb << 8) | (lsb & 0xff);
+	return toReturn;
+}
+
+// >??????? not sure if this is right
+uint16_t bmp280_make_unsigned_short(uint8_t msb, uint8_t lsb)
+{
+	uint16_t toReturn = (msb << 8) | (lsb & 0xff);
+	return toReturn;
+}
+
+// Possible version where parameter is uint32_t where top 2 bytes are msb and lsb
+// For use in parsing the digs
+uint16_t bmp280_unsigned_short_from_buffer(uint32_t* buffer)
+{
+	uint8_t msb = &buffer >> 24;
+	uint8_t lsb = (&buffer << 8) >> 24;
+	uint16_t toReturn = (msb << 8) | (lsb & 0xff);
+	return toReturn;
+}
 
 uint32_t bmp280_get_t_fine(uint32_t raw_temp)
 {
@@ -59,6 +84,8 @@ uint32_t bmp280_get_t_fine(uint32_t raw_temp)
 	return t_fine;
 }
 
+// Returns temperature in DegC, double precision. Output value of “51.23” equals 51.23 DegC.
+// t_fine carries fine temperature as global value
 double bmp280_compensate_T_double(uint32_t raw_temp)
 {
 	uint32_t t_fine = bmp280_get_t_fine(raw_temp);
