@@ -36,28 +36,36 @@ void bmp280_init(struct BMP280 *sensor, struct spi *spi)
 	sensor->spi = spi;
 }
 
-// change these
-uint8_t flash_read_status_register(struct flash *flash)
+uint8_t BMP280_read_id(struct BMP280 *BMP280)
 {
-	uint32_t writeBuffer = 0x05;
-	spi_write_continue(flash->spi, &writeBuffer, 1);
+	uint32_t sensorID = 0xD0;
+	spi_write_continue(BMP280->spi, &sensorID, 1);
 	uint32_t readBuffer = 0;
-	spi_read(flash->spi, &readBuffer, 1);
+	spi_read(BMP280->spi, &readBuffer, 1);
 	return (uint8_t)readBuffer;
 }
 
-void flash_write_enable(struct flash *flash)
-{
-	uint32_t writeBuffer = 0x06;
-	spi_write(flash->spi, &writeBuffer, 1);
-}
+// // change these
+// uint8_t flash_read_status_register(struct flash *flash)
+// {
+// 	uint32_t writeBuffer = 0x05;
+// 	spi_write_continue(flash->spi, &writeBuffer, 1);
+// 	uint32_t readBuffer = 0;
+// 	spi_read(flash->spi, &readBuffer, 1);
+// 	return (uint8_t)readBuffer;
+// }
+
+// void flash_write_enable(struct flash *flash)
+// {
+// 	uint32_t writeBuffer = 0x06;
+// 	spi_write(flash->spi, &writeBuffer, 1);
+// }
 
 
 
 static struct uart uart;
 static struct spi spi;
 static struct BMP280 sensor;
-static struct am1815 rtc;
 
 int main(void)
 {
@@ -80,83 +88,10 @@ int main(void)
 	spi_init(&spi, 0, 2000000u);
 	spi_enable(&spi);
 
-	// Initialize flash
-	flash_init(&flash, &spi);
+	// Initialize sensor
+	bmp280_init(&sensor, &spi);
 
-	// Initalize RTC
-	am1815_init(&rtc, &spi);
-
-	spi_chip_select(&spi, SPI_CS_0);
-
-	// Test flash functions
-	int size = 15;
-	uint8_t buffer[size];		// this is 4x bigger than necessary
-	// initialize buffer to all -1 (shouldn't be necessary to do this)
-	for (int i = 0; i < size; i++) {
-		buffer[i] = -1;
-	}
-
-	// print the data before write
-	flash_read_data(&flash, 0x04, buffer, size);
-	char* buf = buffer;
-	am_util_stdio_printf("before write:\r\n");
-	for (int i = 0; i < size; i++) {
-		am_util_stdio_printf("%02X ", (int) buf[i]);
-		am_util_delay_ms(10);
-	}
-	am_util_stdio_printf("\r\n");
-	am_util_delay_ms(250);
-
-	// print the flash ID to make sure the CS is connected correctly
-	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
-
-	// print the RTC ID to make sure the CS is connected correctly
-	spi_chip_select(&spi, SPI_CS_3);
-	am_util_delay_ms(250);
-	am_util_stdio_printf("RTC ID: %02X\r\n", am1815_read_register(&rtc, 0x28));
-
-	// write the RTC time to the flash chip
-	struct timeval time = am1815_read_time(&rtc);
-	// print the seconds from the RTC to make sure the time is correct
-	am_util_stdio_printf("secs: %lld\r\n", time.tv_sec);
-	uint64_t sec = (uint64_t)time.tv_sec;
-	uint8_t* tmp = (uint8_t*)&sec;
-	spi_chip_select(&spi, SPI_CS_0);
-	am_util_delay_ms(250);
-
-	// print the flash ID to make sure the CS is connected coorrectly
-	am_util_stdio_printf("flash ID: %02X\r\n", flash_read_id(&flash));
-	flash_page_program(&flash, 0x05, tmp, 8);
-
-	// print flash data after write
-	am_util_delay_ms(1000);
-	flash_read_data(&flash, 0x04, buffer, size);
-	buf = buffer;
-	am_util_stdio_printf("after write:\r\n");
-	for (int i = 0; i < size; i++) {
-		am_util_stdio_printf("%02X ", (int) buf[i]);
-		am_util_delay_ms(10);
-	}
-	am_util_stdio_printf("\r\n");
-
-	// print the seconds again to make sure we are reading correctly
-	uint64_t writtenSecs = 0;
-	memcpy(&writtenSecs, buffer+1, 8);
-	am_util_stdio_printf("writtenSecs: %lld\r\n", writtenSecs);
-
-	// erase data
-	am_util_delay_ms(250);
-	flash_sector_erase(&flash, 0x05);
-
-	// print flash data after write
-	am_util_delay_ms(1000);
-	flash_read_data(&flash, 0x04, buffer, size);
-	buf = buffer;
-	am_util_stdio_printf("after erase:\r\n");
-	for (int i = 0; i < size; i++) {
-		am_util_stdio_printf("%02X ", (int) buf[i]);
-		am_util_delay_ms(10);
-	}
-	am_util_stdio_printf("\r\n");
-	am_util_stdio_printf("done\r\n");
+	// Get ID of sensor
+	am_util_stdio_printf("ID: %02X\r\n", BMP280_read_id(&sensor));
+	am_util_stdio_printf("test\r\n");
 }
