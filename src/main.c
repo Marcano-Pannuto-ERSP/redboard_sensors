@@ -23,15 +23,40 @@
 
 #include <spi.h>
 #include <uart.h>
-#include <flash.h>
 #include <am1815.h>
 
-/*
-* Inializing the MCU and UART are the only things kept from the original file
-*/
+/** Structure representing the BMP280 sensor */
+struct BMP280
+{
+	struct spi *spi;
+};
+
+void bmp280_init(struct BMP280 *sensor, struct spi *spi)
+{
+	sensor->spi = spi;
+}
+
+// change these
+uint8_t flash_read_status_register(struct flash *flash)
+{
+	uint32_t writeBuffer = 0x05;
+	spi_write_continue(flash->spi, &writeBuffer, 1);
+	uint32_t readBuffer = 0;
+	spi_read(flash->spi, &readBuffer, 1);
+	return (uint8_t)readBuffer;
+}
+
+void flash_write_enable(struct flash *flash)
+{
+	uint32_t writeBuffer = 0x06;
+	spi_write(flash->spi, &writeBuffer, 1);
+}
+
+
+
 static struct uart uart;
 static struct spi spi;
-static struct flash flash;
+static struct BMP280 sensor;
 static struct am1815 rtc;
 
 int main(void)
