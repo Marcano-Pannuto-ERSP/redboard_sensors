@@ -66,6 +66,7 @@ uint32_t bmp280_get_adc_temp(struct bmp280 *bmp280)
 	ptr[1] = activate;
 	spi_write(bmp280->spi, &buffer, 2);
 
+	// read temperature
 	uint32_t tempRegister = 0xFA;
 	spi_write_continue(bmp280->spi, &tempRegister, 1);
 	uint32_t readBuffer = 0;
@@ -90,6 +91,7 @@ uint32_t bmp280_get_adc_pressure(struct bmp280 *bmp280)
 	ptr[1] = activate;
 	spi_write(bmp280->spi, &buffer, 2);
 
+	// read pressure
 	uint32_t tempRegister = 0xF7;
 	spi_write_continue(bmp280->spi, &tempRegister, 1);
 	uint32_t readBuffer = 0;
@@ -249,16 +251,17 @@ int main(void)
 
 	// Get ID of sensor
 	am_util_stdio_printf("ID: %02X\r\n", bmp280_read_id(&sensor));
+
+	// Test read register function
 	uint32_t buffer = 0;
 	bmp280_read_register(&sensor, 0xD0, &buffer, 1);
 	am_util_stdio_printf("Read Register ID: %02X\r\n", buffer);
-	uint32_t raw_temp = bmp280_get_adc_temp(&sensor);
-	am_util_stdio_printf("Raw Temp: %u\r\n", raw_temp);
 
 	// Test temp compensation
-	am_util_stdio_printf("t_fine: %u\r\n", bmp280_get_t_fine(&sensor, raw_temp));
+	uint32_t raw_temp = bmp280_get_adc_temp(&sensor);
 	am_util_stdio_printf("temperature: %F\r\n", bmp280_compensate_T_double(&sensor, raw_temp));
 
+	// Test pressure compensation
 	uint32_t raw_press = bmp280_get_adc_pressure(&sensor);
 	am_util_stdio_printf("pressure: %F\r\n", bmp280_compensate_P_double(&sensor, raw_press, raw_temp));
 
