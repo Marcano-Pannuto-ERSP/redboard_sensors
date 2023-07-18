@@ -7,7 +7,7 @@
  * This is an edited file of main.c from https://github.com/gemarcano/redboard_lora_example
  * which this repo was forked from
  *
- * Tests reading time from the RTC to reading/writing/erasing from the flash chip.
+ * Tests getting temperature and pressure from the BMP280 sensor.
  */
 
 #include "am_mcu_apollo.h"
@@ -26,33 +26,33 @@
 #include <am1815.h>
 
 /** Structure representing the BMP280 sensor */
-struct BMP280
+struct bmp280
 {
 	struct spi *spi;
 };
 
-void bmp280_init(struct BMP280 *sensor, struct spi *spi)
+void bmp280_init(struct bmp280 *sensor, struct spi *spi)
 {
 	sensor->spi = spi;
 }
 
-uint8_t BMP280_read_id(struct BMP280 *BMP280)
+uint8_t bmp280_read_id(struct bmp280 *bmp280)
 {
 	uint32_t sensorID = 0xD0;
-	spi_write_continue(BMP280->spi, &sensorID, 1);
+	spi_write_continue(bmp280->spi, &sensorID, 1);
 	uint32_t readBuffer = 0;
-	spi_read(BMP280->spi, &readBuffer, 1);
+	spi_read(bmp280->spi, &readBuffer, 1);
 	return (uint8_t)readBuffer;
 }
 
-void BMP280_read_register(struct BMP280 *BMP280, uint32_t addr, uint32_t *buffer, uint32_t size)
+void bmp280_read_register(struct bmp280 *bmp280, uint32_t addr, uint32_t *buffer, uint32_t size)
 {
 	addr |= 0x80;
-	spi_write_continue(BMP280->spi, &addr, 1);
-	spi_read(BMP280->spi, buffer, size);
+	spi_write_continue(bmp280->spi, &addr, 1);
+	spi_read(bmp280->spi, buffer, size);
 }
 
-uint32_t BMP280_get_adc_temp(struct BMP280 *BMP280)
+uint32_t bmp280_get_adc_temp(struct bmp280 *bmp280)
 {
 	// take out of sleep mode
 	// set temp oversampling
@@ -64,19 +64,19 @@ uint32_t BMP280_get_adc_temp(struct BMP280 *BMP280)
 	uint8_t* ptr = &buffer;
 	ptr[0] = addr;
 	ptr[1] = activate;
-	spi_write(BMP280->spi, &buffer, 2);
+	spi_write(bmp280->spi, &buffer, 2);
 
 	uint32_t tempRegister = 0xFA;
-	spi_write_continue(BMP280->spi, &tempRegister, 1);
+	spi_write_continue(bmp280->spi, &tempRegister, 1);
 	uint32_t readBuffer = 0;
-	spi_read(BMP280->spi, &readBuffer, 3);
+	spi_read(bmp280->spi, &readBuffer, 3);
 	uint8_t* ptr2 = &readBuffer;
 	uint32_t temp = ptr2[2] + (ptr2[1] << 8) + (ptr2[0] << 16);
 	temp = temp >> 4;
 	return temp;
 }
 
-uint32_t BMP280_get_adc_pressure(struct BMP280 *BMP280)
+uint32_t bmp280_get_adc_pressure(struct bmp280 *bmp280)
 {
 	// take out of sleep mode
 	// set temp oversampling
@@ -88,12 +88,12 @@ uint32_t BMP280_get_adc_pressure(struct BMP280 *BMP280)
 	uint8_t* ptr = &buffer;
 	ptr[0] = addr;
 	ptr[1] = activate;
-	spi_write(BMP280->spi, &buffer, 2);
+	spi_write(bmp280->spi, &buffer, 2);
 
 	uint32_t tempRegister = 0xF7;
-	spi_write_continue(BMP280->spi, &tempRegister, 1);
+	spi_write_continue(bmp280->spi, &tempRegister, 1);
 	uint32_t readBuffer = 0;
-	spi_read(BMP280->spi, &readBuffer, 3);
+	spi_read(bmp280->spi, &readBuffer, 3);
 	uint8_t* ptr2 = &readBuffer;
 	uint32_t temp = ptr2[2] + (ptr2[1] << 8) + (ptr2[0] << 16);
 	temp = temp >> 4;
@@ -103,8 +103,9 @@ uint32_t BMP280_get_adc_pressure(struct BMP280 *BMP280)
 // These functions are from the BMP280 datasheet section 8.1
 // They are edited a little bit but the math is the same
 
-// Possible version where parameter is uint32_t that contains 2 bytes, msb and lsb
-// For use in parsing the digs
+// Parses the contents of buffer into an unsigned 2-byte short
+// Expecting buffer to be the result of reading 2 registers where 
+// the smaller register is the LSB
 uint16_t bmp280_unsigned_short_from_buffer(uint32_t* buffer)
 {
 	uint8_t* ptr = buffer;
@@ -125,18 +126,18 @@ int16_t bmp280_signed_short_from_buffer(uint32_t* buffer)
 	return toReturn;
 }
 
-uint32_t bmp280_get_t_fine(struct BMP280 *BMP280, uint32_t raw_temp)
+uint32_t bmp280_get_t_fine(struct bmp280 *bmp280, uint32_t raw_temp)
 {
 	uint32_t dig_T1_buf;
-	BMP280_read_register(BMP280, 0x88, &dig_T1_buf, 2);		//0x88 is lsb and 0x89 is msb
+	bmp280_read_register(bmp280, 0x88, &dig_T1_buf, 2);		//0x88 is lsb and 0x89 is msb
 	uint16_t dig_T1 = bmp280_unsigned_short_from_buffer(&dig_T1_buf);
 
 	uint32_t dig_T2_buf;
-	BMP280_read_register(BMP280, 0x8A, &dig_T2_buf, 2);		//0x8A is lsb and 0x8B is msb
+	bmp280_read_register(bmp280, 0x8A, &dig_T2_buf, 2);		//0x8A is lsb and 0x8B is msb
 	int16_t dig_T2 = bmp280_signed_short_from_buffer(&dig_T2_buf);
 
 	uint32_t dig_T3_buf;
-	BMP280_read_register(BMP280, 0x8C, &dig_T3_buf, 2);		//0x8C is lsb and 0x8D is msb
+	bmp280_read_register(bmp280, 0x8C, &dig_T3_buf, 2);		//0x8C is lsb and 0x8D is msb
 	int16_t dig_T3 = bmp280_signed_short_from_buffer(&dig_T3_buf);
 
 	uint32_t t_fine;
@@ -149,53 +150,52 @@ uint32_t bmp280_get_t_fine(struct BMP280 *BMP280, uint32_t raw_temp)
 }
 
 // Returns temperature in DegC, double precision. Output value of “51.23” equals 51.23 DegC.
-// t_fine carries fine temperature as global value
-double bmp280_compensate_T_double(struct BMP280 *BMP280, uint32_t raw_temp)
+double bmp280_compensate_T_double(struct bmp280 *bmp280, uint32_t raw_temp)
 {
-	uint32_t t_fine = bmp280_get_t_fine(BMP280, raw_temp);
+	uint32_t t_fine = bmp280_get_t_fine(bmp280, raw_temp);
 	double T = t_fine / 5120.0;
 	return T;
 }
 
 // Returns pressure in Pa as double. Output value of “96386.2” equals 96386.2 Pa = 963.862 hPa
-double bmp280_compensate_P_double(struct BMP280 *BMP280, uint32_t raw_press, uint32_t raw_temp)
+double bmp280_compensate_P_double(struct bmp280 *bmp280, uint32_t raw_press, uint32_t raw_temp)
 {
-	uint32_t t_fine = bmp280_get_t_fine(BMP280, raw_temp);
+	uint32_t t_fine = bmp280_get_t_fine(bmp280, raw_temp);
 
 	uint32_t dig_P1_buf;
-	BMP280_read_register(BMP280, 0x8E, &dig_P1_buf, 2);		//0x8E is lsb and 0x8F is msb
+	bmp280_read_register(bmp280, 0x8E, &dig_P1_buf, 2);		//0x8E is lsb and 0x8F is msb
 	uint16_t dig_P1 = bmp280_unsigned_short_from_buffer(&dig_P1_buf);
 
 	uint32_t dig_P2_buf;
-	BMP280_read_register(BMP280, 0x90, &dig_P2_buf, 2);		//0x90 is lsb and 0x91 is msb
+	bmp280_read_register(bmp280, 0x90, &dig_P2_buf, 2);		//0x90 is lsb and 0x91 is msb
 	int16_t dig_P2 = bmp280_signed_short_from_buffer(&dig_P2_buf);
 
 	uint32_t dig_P3_buf;
-	BMP280_read_register(BMP280, 0x92, &dig_P3_buf, 2);		//0x92 is lsb and 0x93 is msb
+	bmp280_read_register(bmp280, 0x92, &dig_P3_buf, 2);		//0x92 is lsb and 0x93 is msb
 	int16_t dig_P3 = bmp280_signed_short_from_buffer(&dig_P3_buf);
 
 	uint32_t dig_P4_buf;
-	BMP280_read_register(BMP280, 0x94, &dig_P4_buf, 2);		//0x94 is lsb and 0x95 is msb
+	bmp280_read_register(bmp280, 0x94, &dig_P4_buf, 2);		//0x94 is lsb and 0x95 is msb
 	int16_t dig_P4 = bmp280_signed_short_from_buffer(&dig_P4_buf);
 
 	uint32_t dig_P5_buf;
-	BMP280_read_register(BMP280, 0x96, &dig_P5_buf, 2);		//0x96 is lsb and 0x97 is msb
+	bmp280_read_register(bmp280, 0x96, &dig_P5_buf, 2);		//0x96 is lsb and 0x97 is msb
 	int16_t dig_P5 = bmp280_signed_short_from_buffer(&dig_P5_buf);
 
 	uint32_t dig_P6_buf;
-	BMP280_read_register(BMP280, 0x98, &dig_P6_buf, 2);		//0x98 is lsb and 0x99 is msb
+	bmp280_read_register(bmp280, 0x98, &dig_P6_buf, 2);		//0x98 is lsb and 0x99 is msb
 	int16_t dig_P6 = bmp280_signed_short_from_buffer(&dig_P6_buf);
 
 	uint32_t dig_P7_buf;
-	BMP280_read_register(BMP280, 0x9A, &dig_P7_buf, 2);		//0x9A is lsb and 0x9B is msb
+	bmp280_read_register(bmp280, 0x9A, &dig_P7_buf, 2);		//0x9A is lsb and 0x9B is msb
 	int16_t dig_P7 = bmp280_signed_short_from_buffer(&dig_P7_buf);
 
 	uint32_t dig_P8_buf;
-	BMP280_read_register(BMP280, 0x9C, &dig_P8_buf, 2);		//0x9C is lsb and 0x9D is msb
+	bmp280_read_register(bmp280, 0x9C, &dig_P8_buf, 2);		//0x9C is lsb and 0x9D is msb
 	int16_t dig_P8 = bmp280_signed_short_from_buffer(&dig_P8_buf);
 
 	uint32_t dig_P9_buf;
-	BMP280_read_register(BMP280, 0x9E, &dig_P9_buf, 2);		//0x9E is lsb and 0x9F is msb
+	bmp280_read_register(bmp280, 0x9E, &dig_P9_buf, 2);		//0x9E is lsb and 0x9F is msb
 	int16_t dig_P9 = bmp280_signed_short_from_buffer(&dig_P9_buf);
 
 	double var1, var2, p;
@@ -219,7 +219,7 @@ double bmp280_compensate_P_double(struct BMP280 *BMP280, uint32_t raw_press, uin
 
 static struct uart uart;
 static struct spi spi;
-static struct BMP280 sensor;
+static struct bmp280 sensor;
 
 int main(void)
 {
@@ -248,20 +248,21 @@ int main(void)
 	bmp280_init(&sensor, &spi);
 
 	// Get ID of sensor
-	am_util_stdio_printf("ID: %02X\r\n", BMP280_read_id(&sensor));
+	am_util_stdio_printf("ID: %02X\r\n", bmp280_read_id(&sensor));
 	uint32_t buffer = 0;
-	BMP280_read_register(&sensor, 0xD0, &buffer, 1);
+	bmp280_read_register(&sensor, 0xD0, &buffer, 1);
 	am_util_stdio_printf("Read Register ID: %02X\r\n", buffer);
-	uint32_t raw_temp = BMP280_get_adc_temp(&sensor);
+	uint32_t raw_temp = bmp280_get_adc_temp(&sensor);
 	am_util_stdio_printf("Raw Temp: %u\r\n", raw_temp);
 
 	// Test temp compensation
 	am_util_stdio_printf("t_fine: %u\r\n", bmp280_get_t_fine(&sensor, raw_temp));
 	am_util_stdio_printf("temperature: %F\r\n", bmp280_compensate_T_double(&sensor, raw_temp));
 
-	uint32_t raw_press = BMP280_get_adc_pressure(&sensor);
+	uint32_t raw_press = bmp280_get_adc_pressure(&sensor);
 	am_util_stdio_printf("pressure: %F\r\n", bmp280_compensate_P_double(&sensor, raw_press, raw_temp));
 
+	// Avoid breaking :)
 	while(1){
 
 	};
