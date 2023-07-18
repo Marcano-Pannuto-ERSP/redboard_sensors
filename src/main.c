@@ -94,39 +94,48 @@ uint16_t bmp280_make_unsigned_short(uint8_t msb, uint8_t lsb)
 	return toReturn;
 }
 
-// Possible version where parameter is uint32_t where top 2 bytes are msb and lsb
+// Possible version where parameter is uint32_t that contains 2 bytes, msb and lsb
 // For use in parsing the digs
 uint16_t bmp280_unsigned_short_from_buffer(uint32_t* buffer)
 {
-	uint8_t msb = &buffer >> 24;
-	uint8_t lsb = (&buffer << 8) >> 24;
+	uint8_t* ptr = buffer;
+	uint8_t msb = ptr[0];
+	uint8_t lsb = ptr[1];
+
 	uint16_t toReturn = (msb << 8) | (lsb & 0xff);
 	return toReturn;
 }
 
-uint32_t bmp280_get_t_fine(uint32_t raw_temp)
+uint32_t bmp280_get_t_fine(struct BMP280 *BMP280, uint32_t raw_temp)
 {
-	uint32_t t_fine;
-	double var1, var2;
-	var1 = (((double)raw_temp)/16384.0 - ((double)dig_T1)/1024.0) * ((double)dig_T2);
-	var2 = ((((double)raw_temp)/131072.0 - ((double)dig_T1)/8192.0) *
-	(((double)raw_temp)/131072.0 - ((double) dig_T1)/8192.0)) * ((double)dig_T3);
-	t_fine = (uint32_t)(var1 + var2);
-	return t_fine;
-}
+	uint32_t dig_T1_buf;
+	BMP280_read_register(BMP280, 0x88, &dig_T1_buf, 2);		//0x88 is lsb and 0x89 is msb
+	uint16_t dig_T1 = bmp280_unsigned_short_from_buffer(dig_T1_buf);
 
+	am_util_stdio_printf("dig_T1: %u", dig_T1);
+
+	// uint32_t t_fine;
+	// double var1, var2;
+	// var1 = (((double)raw_temp)/16384.0 - ((double)dig_T1)/1024.0) * ((double)dig_T2);
+	// var2 = ((((double)raw_temp)/131072.0 - ((double)dig_T1)/8192.0) *
+	// (((double)raw_temp)/131072.0 - ((double) dig_T1)/8192.0)) * ((double)dig_T3);
+	// t_fine = (uint32_t)(var1 + var2);
+	// return t_fine;
+	return -1;
+}
+/*
 // Returns temperature in DegC, double precision. Output value of “51.23” equals 51.23 DegC.
 // t_fine carries fine temperature as global value
-double bmp280_compensate_T_double(uint32_t raw_temp)
+double bmp280_compensate_T_double(struct BMP280 *BMP280, uint32_t raw_temp)
 {
-	uint32_t t_fine = bmp280_get_t_fine(raw_temp);
+	uint32_t t_fine = bmp280_get_t_fine(BMP280, raw_temp);
 	double T = t_fine / 5120.0;
 	return T;
 }
 // Returns pressure in Pa as double. Output value of “96386.2” equals 96386.2 Pa = 963.862 hPa
-double bmp280_compensate_P_double(uint32_t raw_press, uint32_t raw_temp)
+double bmp280_compensate_P_double(struct BMP280 *BMP280, uint32_t raw_press, uint32_t raw_temp)
 {
-	uint32_t t_fine = bmp280_get_t_fine(raw_temp);
+	uint32_t t_fine = bmp280_get_t_fine(BMP280, raw_temp);
 
 	double var1, var2, p;
 	var1 = ((double)t_fine/2.0) - 64000.0;
@@ -146,6 +155,7 @@ double bmp280_compensate_P_double(uint32_t raw_press, uint32_t raw_temp)
 	p = p + (var1 + var2 + ((double)dig_P7)) / 16.0;
 	return p;
 }
+*/
 
 static struct uart uart;
 static struct spi spi;
@@ -182,7 +192,11 @@ int main(void)
 	uint32_t buffer = 0;
 	BMP280_read_register(&sensor, 0xD0, &buffer, 1);
 	am_util_stdio_printf("Read Register ID: %02X\r\n", buffer);
-	am_util_stdio_printf("Raw Temp: %u\r\n", BMP280_get_adc_temp(&sensor));
+	uint32_t raw_temp = BMP280_get_adc_temp(&sensor);
+	am_util_stdio_printf("Raw Temp: %u\r\n", raw_temp);
+
+	// Test temp compensation
+	bmp280_get_t_fine(&sensor, raw_temp);
 
 	while(1){
 
