@@ -1,7 +1,7 @@
-# Example application using a LoRa module, using `asimple`
+# Developing sensor drivers for `asmiple`
 
-This is an example application using the asimple and forked AmbiqSuiteSDK
-projects to read time from the RTC and read/write/erase from the flash chip.
+This is code we have developed for sensors (BMP280) that is transferred to
+`asimple` modules once done.
 
 ## Dependencies
  - https://github.com/gemarcano/AmbiqSuiteSDK
