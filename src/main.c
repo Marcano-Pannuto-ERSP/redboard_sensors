@@ -31,9 +31,9 @@ struct bmp280
 	struct spi *spi;
 };
 
-void bmp280_init(struct bmp280 *sensor, struct spi *spi)
+void bmp280_init(struct bmp280 *bmp280, struct spi *spi)
 {
-	sensor->spi = spi;
+	bmp280->spi = spi;
 }
 
 uint8_t bmp280_read_id(struct bmp280 *bmp280)
